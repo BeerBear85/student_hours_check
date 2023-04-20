@@ -25,6 +25,8 @@ except IOError:
 else:
     df_persons = pd.read_excel(args.person_excel_file, sheet_name='ECS_Allocation')
 
+#Drop entries not matching the department name
+df_persons = df_persons[df_persons['Department'] == args.department_name]
 
 #For each pdf file in the input folder, extract text and store in array
 pdf_text_array = []
@@ -55,21 +57,23 @@ for file_text in pdf_text_array:
 
     #use regex to find the person name (text after "Medarbejdernavn" in same line)
     person_name = re.search(r'Medarbejdernavn: (.*)', file_text)
-    key_value_dict['person_name'] = person_name[0].strip()
+    key_value_dict['person_name'] = person_name[1].strip() #get the match in group 1
 
     #use regex to find the person number (text after "Medarbejdernr." in same line)
     person_number = re.search(r'Medarbejdernr.: (.*)', file_text)
-    key_value_dict['person_number'] = person_number[0].strip()
+    key_value_dict['person_number'] = person_number[1].strip()
 
     try:
-        #use regex to find the total time (text after "Totaltid" in same line)
-        total_time = re.search(r'CFS0900.*Totaltid (.*)', file_text)
-        total_time = total_time[0]
+        #use regex to find all the total time (text after "Totaltid" in same line)
+        total_time = re.findall(r'Totaltid (.*)', file_text)
+        #extract the last match
+        total_time = total_time[-1]
         #use regex to extract and convert the time in the end of total time (the XX:XX) in the end of the match
         total_time = re.search(r'(\d+:\d{2})', total_time)
         total_time = total_time[total_time.lastindex].strip()
-        #catch exception for TypeError if no match is found (no hours registred)
-    except TypeError:
+    #catch exception for TypeError if no match is found (no hours registred)
+    #catch exception for IndexError if no match is found (no hours registred)
+    except (TypeError, IndexError):
         total_time = '0:00'
     key_value_dict['total_time'] = total_time
 
@@ -81,13 +85,12 @@ full_email_string = 'Følgende tidsregistreringer for ' + args.department_name +
 for timesheet_key_value in key_value_array:
     #Check if name of timesheet matches name in person excel file
     for index, row in df_persons.iterrows():
-        print('Matching ' + timesheet_key_value['person_name'] + ' with ' + row['Name'])
+        #print('Matching ' + timesheet_key_value['person_name'] + ' with ' + row['Name'])
         if timesheet_key_value['person_name'] == row['Name']:
-            #Check if department name matches department name in person excel file
-            if row['Department'] == args.department_name:
-                #Create email reply text
-                email_reply_line = timesheet_key_value['person_name'] + '/' + timesheet_key_value['person_number'] + ' (' + timesheet_key_value['total_time'] + ' timer)\n'
-                full_email_string += email_reply_line
+
+            #Create email reply text
+            email_reply_line = timesheet_key_value['person_name'] + '/' + timesheet_key_value['person_number'] + ' (' + timesheet_key_value['total_time'] + ' timer)\n'
+            full_email_string += email_reply_line
 
     
 print(full_email_string)
